@@ -6,7 +6,7 @@ import io, zipfile, gc
 from notebook_func_nr import process_input
 
 st.set_page_config(page_title="NR Data Processor")
-st.title("📒 NR → Server Splits")
+st.title("📒 NR data file → Server Uploadable Splits")
 
 # Initialize flags
 if "downloaded" not in st.session_state:
