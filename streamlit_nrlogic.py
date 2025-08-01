@@ -8,43 +8,54 @@ from notebook_func_nr import process_input
 st.set_page_config(page_title="NR Data Processor")
 st.title("📒 NR data file → Server Uploadable Splits")
 
-# Initialize flags
+# ─── 1) Initialize session‐state flag ────────────────────────────
 if "downloaded" not in st.session_state:
     st.session_state.downloaded = False
 
-uploaded = st.file_uploader(
-    "Upload your NR File",
-    type=["xls", "xlsx", "csv"]
-)
+# ─── 2) Show uploader only if we haven't downloaded yet ──────────
+if not st.session_state.downloaded:
+    uploaded = st.file_uploader(
+        "Upload your NR File",
+        type=["xls", "xlsx", "csv"],
+        key="uploader"
+    )
+else:
+    uploaded = None
 
-# 1) Only process if there's an upload, we haven't processed yet, and not downloaded
-if uploaded is not None and "file_outputs" not in st.session_state and not st.session_state.downloaded:
+# ─── 3) Process the uploaded file once ──────────────────────────
+if (
+    uploaded is not None
+    and "file_outputs" not in st.session_state
+    and not st.session_state.downloaded
+):
+    # read into DataFrame
     if uploaded.name.lower().endswith(("xls", "xlsx")):
         df_in = pd.read_excel(uploaded)
     else:
         df_in = pd.read_csv(uploaded)
 
     with st.spinner("Processing…"):
+        # process_input should return List[Tuple[str, BytesIO]]
         st.session_state.file_outputs = process_input(df_in)
 
-    # drop the large DataFrame reference
+    # free the original DataFrame
     del df_in
     gc.collect()
 
     st.success("✅ Processing complete — ready to download!")
 
-# 2) If processing is done and not yet downloaded, show the ZIP download
+# ─── 4) Build ZIP & show download button ─────────────────────────
 if "file_outputs" in st.session_state and not st.session_state.downloaded:
-    # Build ZIP once
+    # build ZIP once
     if "zip_buffer" not in st.session_state:
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for fname, buf in st.session_state.file_outputs:
-                zf.writestr(fname, buf.getvalue())
-        zip_buffer.seek(0)
-        st.session_state.zip_buffer = zip_buffer
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for fname, file_buf in st.session_state.file_outputs:
+                zf.writestr(fname, file_buf.getvalue())
+        buf.seek(0)
+        st.session_state.zip_buffer = buf
 
-    # Download button
+    # single download button for all server files
     clicked = st.download_button(
         label="📥 Download all Server files as ZIP",
         data=st.session_state.zip_buffer,
@@ -53,13 +64,13 @@ if "file_outputs" in st.session_state and not st.session_state.downloaded:
     )
 
     if clicked:
-        # Mark downloaded and free memory
+        # mark downloaded, clear everything, and rerun without uploader
         st.session_state.downloaded = True
         del st.session_state.file_outputs
         del st.session_state.zip_buffer
         gc.collect()
-        st.success("🗑️ Memory cleared. Reload or re-upload to process another file.")
+        st.experimental_rerun()
 
-# 3) If we've already downloaded, just show a prompt
+# ─── 5) After download, show prompt ───────────────────────────────
 elif st.session_state.downloaded:
-    st.info("You’ve downloaded and freed memory. To run again, reload the page or upload a new file.")
+    st.info("🗑️ Memory cleared. Reload or re-upload to process another file.")
