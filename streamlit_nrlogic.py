@@ -28,7 +28,7 @@ if (
     and "file_outputs" not in st.session_state
     and not st.session_state.downloaded
 ):
-    # read into DataFrame
+    # Read into DataFrame
     if uploaded.name.lower().endswith(("xls", "xlsx")):
         df_in = pd.read_excel(uploaded)
     else:
@@ -38,7 +38,7 @@ if (
         # process_input should return List[Tuple[str, BytesIO]]
         st.session_state.file_outputs = process_input(df_in)
 
-    # free the original DataFrame
+    # Free the original DataFrame
     del df_in
     gc.collect()
 
@@ -46,7 +46,7 @@ if (
 
 # ─── 4) Build ZIP & show download button ─────────────────────────
 if "file_outputs" in st.session_state and not st.session_state.downloaded:
-    # build ZIP once
+    # Build ZIP once
     if "zip_buffer" not in st.session_state:
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -55,7 +55,7 @@ if "file_outputs" in st.session_state and not st.session_state.downloaded:
         buf.seek(0)
         st.session_state.zip_buffer = buf
 
-    # single download button for all server files
+    # Single download button for all server files
     clicked = st.download_button(
         label="📥 Download all Server files as ZIP",
         data=st.session_state.zip_buffer,
@@ -64,13 +64,21 @@ if "file_outputs" in st.session_state and not st.session_state.downloaded:
     )
 
     if clicked:
-        # mark downloaded, clear everything, and rerun without uploader
+        # 1) Mark downloaded
         st.session_state.downloaded = True
+
+        # 2) Drop everything big
         del st.session_state.file_outputs
         del st.session_state.zip_buffer
-        gc.collect()
-        st.experimental_rerun()
 
-# ─── 5) After download, show prompt ───────────────────────────────
+        # 3) Also remove the uploader’s stored file
+        st.session_state.pop("uploader", None)
+
+        # 4) Force a GC sweep
+        gc.collect()
+
+        st.success("🗑️ Memory cleared. Reload or re-upload to process another file.")
+
+# ─── 5) After download, just show a prompt ────────────────────────
 elif st.session_state.downloaded:
-    st.info("🗑️ Memory cleared. Reload or re-upload to process another file.")
+    st.info("You’ve downloaded and freed memory. To run again, reload the page or upload a new file.")
